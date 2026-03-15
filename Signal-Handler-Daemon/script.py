@@ -23,8 +23,17 @@ threads = [threading.Thread(target=worker) for _ in range(3)]
 for t in threads:
     t.start()
 
+def handler(signum, frame):
+    if signum == signal.SIGINT or signum == signal.SIGTERM:
+        shutdown.set()
+
+signal.signal(signal.SIGTERM, handler)
+signal.signal(signal.SIGINT, handler)
+
 while not shutdown.is_set():
     time.sleep(1)
 
+print("\nshutdown received, waiting for workers...")
 for t in threads:
     t.join()
+print("daemon exited cleanly")
