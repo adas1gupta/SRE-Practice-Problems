@@ -1,0 +1,30 @@
+import threading
+import queue
+import time
+import signal
+
+shutdown, reload_config = threading.Event(), False
+
+tasks = queue.Queue()
+
+def do_work(task):
+    print(f"doing work: {task}")
+    time.sleep(0.5)  # simulate work
+
+def worker():
+    while not shutdown.is_set():
+        try:
+            task = tasks.get(timeout=1.0)
+            do_work(task)
+        except queue.Empty:
+            continue
+
+threads = [threading.Thread(target=worker) for _ in range(3)]
+for t in threads:
+    t.start()
+
+while not shutdown.is_set():
+    time.sleep(1)
+
+for t in threads:
+    t.join()
