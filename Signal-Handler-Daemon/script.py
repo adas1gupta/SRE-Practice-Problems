@@ -3,12 +3,14 @@ import queue
 import time
 import signal
 import json
+import subprocess
+import os
 
 shutdown, reload_config, dump_state = threading.Event(), threading.Event(), threading.Event()
 active_tasks = 0
 start_time = time.time()
-active_tasks_lock = threading.Lock()
 
+active_tasks_lock = threading.Lock()
 tasks = queue.Queue()
 
 def read_config():
@@ -50,6 +52,10 @@ def handler(signum, frame):
         reload_config.set()
     elif signum == signal.SIGUSR1:
         dump_state.set()
+    elif signum == signal.SIGCHLD:
+        while True:
+            pid, status = os.waitpid(-1, os.WNOHANG)
+            if pid == 0: break
 
 def write_to_log_file(payload):
     with open("logs.txt", 'w') as f:
@@ -59,11 +65,14 @@ signal.signal(signal.SIGTERM, handler)
 signal.signal(signal.SIGINT, handler)
 signal.signal(signal.SIGHUP, handler)
 signal.signal(signal.SIGUSR1, handler)
+signal.signal(signal.SIGCHLD, handler)
 
 config = read_config()
 
 # Everything else goes in the main loop
 while not shutdown.is_set():
+    subprocess.Popen(["sleep", "2"])
+
     if reload_config.is_set():
         config = read_config()
         print(f"config reloaded: {config}")
