@@ -39,7 +39,7 @@ def parse_status(pid: int) -> dict:
 
     with open(f"/proc/{pid}/status") as f:
         for line in f:
-            if "VmRSS" in line:
+            if line.startswith("VmRSS:"):
                 fields["VmRSS"] = int(line.split()[1])
             elif "VmSize" in line:
                 fields["VmSize"] = int(line.split()[1])
@@ -53,15 +53,21 @@ def compute_cpu_percentage(process_ids: list[int]) -> dict:
     pid_cpu_percentages = {}
 
     for pid in process_ids:
-        first_half = parse_stat(pid)["CPU jiffies"]
-        pid_cpu_percentages[pid] = -first_half
+        try:
+            first_half = parse_stat(pid)["CPU jiffies"]
+            pid_cpu_percentages[pid] = -first_half
+        except (FileNotFoundError, KeyError):
+            continue
     
     time.sleep(1)
 
     for pid in process_ids:
-        second_half = parse_stat(pid)["CPU jiffies"]
-
-        pid_cpu_percentages[pid] += second_half
+        # process can die mid-sample
+        try:
+            second_half = parse_stat(pid)["CPU jiffies"]
+            pid_cpu_percentages[pid] += second_half
+        except (FileNotFoundError, KeyError):
+            del pid_cpu_percentages[pid]
     
     return pid_cpu_percentages
 
@@ -108,6 +114,9 @@ def display(processes: list[ProcessInfo]):
         print(process)
     
 if __name__ == "__main__":
-    while True:
-        display(get_all_processes())
+    try:
+        while True:
+            display(get_all_processes())
+    except KeyboardInterrupt:
+        print("\nExiting.")
         
