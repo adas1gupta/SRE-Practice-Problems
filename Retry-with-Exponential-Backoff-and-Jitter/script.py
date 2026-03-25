@@ -12,7 +12,7 @@ def retry_decorator(func, max_attempts=3):
         while True:
             try:
                 attempts += 1
-                res = func()
+                res = func(*args, **kwargs)
                 return res
             except PermanentException: 
                 raise

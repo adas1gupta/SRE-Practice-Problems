@@ -33,13 +33,11 @@ def parse_stat(pid: int) -> dict:
 def parse_status(pid: int) -> dict: 
     fields = {}
 
-    with open(f"/proc/{pid}/stat") as f:
-        data = f.read().split(" ")
+    with open(f"/proc/{pid}/status") as f:
+        for line in f:
+            if "VmRSS" in line:
+                fields["VmRSS"] = int(line.split()[1])
+            elif "VmSize" in line:
+                fields["VmSize"] = int(line.split()[1])
 
-        fields["pid"] = data[0]
-        fields["name"] = data[1][1:len(data[1]) - 1]
-        fields["state"] = data[2]
-        fields["CPU jiffies"] = int(data[13]) + int(data[14])
-        fields["thread count"] = int(data[19])
-    
     return fields
