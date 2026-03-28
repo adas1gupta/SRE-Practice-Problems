@@ -4,6 +4,8 @@ import time
 import os
 
 shutdown = threading.Event()
+tracking_history = {}
+N = int(os.getenv("SAMPLES",  5))
 
 def handler(signum, frame):
     if signum == signal.SIGTERM or signum == signal.SIGINT:
@@ -38,6 +40,33 @@ def collect_all_processes() -> list[tuple]:
         process_tuples.append((pid, name, fd_count))
     
     return process_tuples
+
+def track_history(pid: int, name: str, fd_count: int) -> None:
+    identifier = (pid, name)
+        
+    if identifier not in tracking_history: 
+        tracking_history[identifier] = []
+        
+    tracking_history[identifier].append(fd_count)
+
+def detect_growth(identifier: tuple[int, str]) -> bool:
+    counter = 0
+    most_recent = None 
+
+    try:
+        for count in tracking_history[identifier]:
+            if most_recent is not None and count > most_recent:
+                counter += 1
+            else:
+                counter = 0
+
+            most_recent = count 
+
+            if counter >= N: return True
+
+    except KeyError:
+        return False
+
 
 signal.signal(signal.SIGTERM, handler)
 signal.signal(signal.SIGINT, handler)
