@@ -25,6 +25,20 @@ def get_process_name(pid: int) -> str | None:
     except (PermissionError, FileNotFoundError): 
         return None
 
+def collect_all_processes() -> list[tuple]:
+    pids = get_pids()
+    process_tuples = []
+
+    for pid in pids: 
+        fd_count = get_fd_count(pid)
+        name = get_process_name(pid)
+
+        if name is None or fd_count is None: continue
+
+        process_tuples.append((pid, name, fd_count))
+    
+    return process_tuples
+
 signal.signal(signal.SIGTERM, handler)
 signal.signal(signal.SIGINT, handler)
 
