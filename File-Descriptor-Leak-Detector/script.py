@@ -67,6 +67,37 @@ def detect_growth(identifier: tuple[int, str]) -> bool:
     except KeyError:
         return False
 
+## every entry in /proc/<pid>/fd/ is a symlink, not a file
+def categorize_fd_count(pid: int) -> dict | None:
+    categorized_fd = {
+        "file": 0,
+        "socket": 0,
+        "pipe": 0, 
+        "character device": 0
+    }
+
+    try:
+        for item in os.listdir(f"/proc/{pid}/fd"): 
+            try:
+                fd_type = os.readlink(f"/proc/{pid}/fd/{item}")
+            except FileNotFoundError:
+                continue 
+
+            if "socket:" in fd_type: 
+                categorized_fd["socket"] += 1
+            elif "pipe:" in fd_type: 
+                categorized_fd["pipe"] += 1
+            elif "/dev/" in fd_type: 
+                categorized_fd["character device"] += 1
+            else:
+                categorized_fd["file"] += 1
+
+        return categorized_fd
+    except (PermissionError, FileNotFoundError): 
+        return None
+
+
+
 
 signal.signal(signal.SIGTERM, handler)
 signal.signal(signal.SIGINT, handler)
