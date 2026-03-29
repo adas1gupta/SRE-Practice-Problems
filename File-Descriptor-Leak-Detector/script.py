@@ -2,6 +2,7 @@ import signal
 import threading
 import time
 import os
+import json
 
 shutdown = threading.Event()
 tracking_history = {}
@@ -48,6 +49,7 @@ def track_history(pid: int, name: str, fd_count: int) -> None:
         tracking_history[identifier] = []
         
     tracking_history[identifier].append(fd_count)
+    tracking_history[identifier] = tracking_history[identifier][-N:]
 
 def detect_growth(identifier: tuple[int, str]) -> bool:
     counter = 0
@@ -97,8 +99,6 @@ def categorize_fd_count(pid: int) -> dict | None:
         return None
 
 def get_top_file_paths(pid: int) -> list[str] | None:
-    sorted_file_paths = []
-
     try:
         file_path_freq = Counter()
         
@@ -130,7 +130,7 @@ def generate_alert(pid: int, name: str) -> None:
         "top paths": get_top_file_paths(pid) 
     }
     
-    if len(fd_list) < N and if len(fd_list) >= 2: 
+    if len(fd_list) < N and len(fd_list) >= 2: 
         message_dict["growth rate"] = (fd_list[-1] - fd_list[0]) / (len(fd_list) - 1)
     else:
         message_dict["growth rate"] = (fd_list[-1] - fd_list[-N]) / (N - 1)
@@ -144,10 +144,10 @@ if __name__ == "__main__":
     while not shutdown.is_set():
         processes_list = collect_all_processes()
 
-        for process in processes_list:
-            track_history(process, get_process_name(process), get_fd_count(process))
+        for pid, name, fd_count in processes_list:
+            track_history(pid, name, fd_count)
 
-            if detect_growth((process, get_process_name(process))):
-                generate_alert(process, get_process_name(process))
+            if detect_growth((pid, name)):
+                generate_alert(pid, name)
 
         time.sleep(30)
