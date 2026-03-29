@@ -96,7 +96,26 @@ def categorize_fd_count(pid: int) -> dict | None:
     except (PermissionError, FileNotFoundError): 
         return None
 
+def get_top_file_paths(pid: int) -> list[str] | None:
+    sorted_file_paths = []
 
+    try:
+        file_path_freq = Counter()
+        
+        for item in os.listdir(f"/proc/{pid}/fd"): 
+            try:
+                fd_type = os.readlink(f"/proc/{pid}/fd/{item}")
+
+                if fd_type.startswith("/"):
+                    file_path_freq[fd_type] += 1
+
+            except FileNotFoundError:
+                continue 
+        
+        return file_path_freq.most_common(10)
+        
+    except (PermissionError, FileNotFoundError): 
+        return None
 
 
 signal.signal(signal.SIGTERM, handler)
