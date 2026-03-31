@@ -3,6 +3,7 @@ import os
 import subprocess
 import signal
 import threading
+import time
 
 parser = argparse.ArgumentParser(description="cgroups resource enforcer")
 parser.add_argument("--name", required=True, help="Name for the cgroup")
@@ -45,4 +46,39 @@ add_to_cgroup(child_proc.pid)
 
 if __name__ == "__main__":
     while not shutdown.is_set():
-        pass
+        current_memory: int 
+        cpu_stat: int 
+        oom_kill: int = 0 
+
+        with open(cgroup_dir + "memory.current", "r") as f:
+            current_memory = int(f.read())
+        
+        with open(cgroup_dir + "cpu.stat", "r") as f:
+            for line in f:
+                if "usage_usec" in line:
+                    cpu_stat = int(line.split()[-1])
+            
+        with open(cgroup_dir + "memory.events", "r") as f:
+            for line in f:
+                if line.startswith("oom_kill"):
+                    oom_kill = int(line.split()[-1])
+                    if oom_kill > 0: 
+                        print(f"Memory limit passed: {oom_kill}")
+                        if child_proc.poll() is None:
+                            child_proc.terminate()
+                        shutdown.set()
+                        break
+                else:
+                    oom_kill = 0
+
+            if oom_kill > 0: 
+                continue 
+
+        print(f"Current memory usage: {current_memory}")
+        print(f"Current cpu usage: {cpu_stat}")
+        if oom_kill == 0:
+            print(f"Memory limit not passed at the moment") 
+        time.sleep(1)
+
+child_proc.wait()
+os.rmdir(cgroup_dir)
