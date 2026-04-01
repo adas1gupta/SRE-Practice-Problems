@@ -6,6 +6,7 @@ import re
 from enum import Enum
 
 shutdown = threading.Event()
+mode = ParserMode.NORMAL
 
 class Category(Enum):
     NORMAL = 0
@@ -20,6 +21,10 @@ class Category(Enum):
     NIC_HUNG_QUEUE = 11
     LINK_STATE_ISSUES = 12
     CONNTRACK_TABLE_EXHAUSTED = 13
+
+class ParserMode(Enum):
+    NORMAL = 0
+    OOM_ACCUMULATION = 1
 
 def signal_handler(signum, frame):
     if signum == signal.SIGINT or signum == signal.SIGTERM:
@@ -77,6 +82,16 @@ if __name__ == "__main__":
     with open(fd, "r") as f:
         while not shutdown.is_set():
             try:
+                line = f.readline()
+                parsed_line = parse_raw_line(line)
+                category = classification(parsed_line)
+
+                if category == Category.OOM:
+                    mode = ParserMode.OOM_ACCUMULATION
+                else:
+                    mode = ParserMode.NORMAL
+                    
+                
                 print(f.readline(), end="")
             except BlockingIOError:
                 time.sleep(0.1)
