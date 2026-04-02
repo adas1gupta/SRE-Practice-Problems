@@ -56,9 +56,12 @@ if __name__ == "__main__":
 
             elif event.mask & inotify_simple.flags.MOVED_FROM:
                 print(f"path: {event.path}, event type: {event.event_type}, timestamp: {event.timestamp}")
+                pending_moves[event.cookie] = event.name
             
             elif event.mask & inotify_simple.flags.MOVED_TO:
                 print(f"path: {event.path}, event type: {event.event_type}, timestamp: {event.timestamp}")
+                file_contents[event.name] = file_contents[pending_moves[event.cookie]]
+                del file_contents[pending_moves[event.cookie]]
             
             elif event.mask & inotify_simple.flags.ATTRIB:
                 print(f"path: {event.path}, event type: {event.event_type}, timestamp: {event.timestamp}")
