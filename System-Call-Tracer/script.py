@@ -8,6 +8,15 @@ PTRACE_TRACEME = 0
 PTRACE_SYSCALL = 24
 PTRACE_GETREGS = 12
 
+# numbers to system calls mapping
+SYSCALL_NAMES = {}
+with open("/usr/include/x86_64-linux-gnu/asm/unistd_64.h") as f:
+    for line in f:
+        match = re.match(r'#define __NR_(\w+)\s+(\d+)', line)
+        if match:
+            name, number = match.groups()
+            syscall_names[int(number)] = name
+
 class UserRegsStruct(ctypes.Structure):
     _fields_ = [
         ("r15", ctypes.c_ulonglong),
@@ -52,14 +61,7 @@ if __name__ == "__main__":
     binary = parsed.binary 
     binary_args = parsed.args or []
 
-    # numbers to system calls mapping
-    syscall_names = {}
-    with open("/usr/include/x86_64-linux-gnu/asm/unistd_64.h") as f:
-        for line in f:
-            match = re.match(r'#define __NR_(\w+)\s+(\d+)', line)
-            if match:
-                name, number = match.groups()
-                syscall_names[int(number)] = name
+    
 
     pid = os.fork()
 
