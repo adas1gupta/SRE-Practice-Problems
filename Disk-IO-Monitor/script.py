@@ -1,20 +1,24 @@
 import time 
+import os
 
 def parse_diskstats(filepath: str) -> dict:
     device_dict = {}
 
     with open(filepath, 'r') as f:    
-        for line in f:
-            _, _, device_name, reads_done, _, sectors_read, read_time, writes_done, _, sectors_written, write_time, _, iotime, _ = line.split() 
-            device_dict[device_name] = {
-                "reads done": int(reads_done), 
-                "writes done": int(writes_done),
-                "read time": int(read_time),
-                "write time": int(write_time),
-                "sectors read": int(sectors_read), 
-                "sectors written": int(sectors_written), 
-                "time in io": int(iotime),  
-            }
+        try:
+            for line in f:
+                _, _, device_name, reads_done, _, sectors_read, read_time, writes_done, _, sectors_written, write_time, _, iotime, _ = line.split() 
+                device_dict[device_name] = {
+                    "reads done": int(reads_done), 
+                    "writes done": int(writes_done),
+                    "read time": int(read_time),
+                    "write time": int(write_time),
+                    "sectors read": int(sectors_read), 
+                    "sectors written": int(sectors_written), 
+                    "time in io": int(iotime),  
+                }
+        except:
+            continue
     
     return device_dict
 
@@ -91,6 +95,7 @@ def compute_process_metrics(first_snapshot: dict, second_snapshot: dict, elapsed
 
             delta_reads = s2["read_bytes"] - s1["read_bytes"]
             delta_writes = s2["write_bytes"] - s1["write_bytes"]
+            cancelled_write_bytes = s2["cancelled_write_bytes"] - s1["cancelled_write_bytes"]
             read_mbps = (delta_reads / (1024 * 1024)) / elapsed_time
             write_mbps = ((delta_writes - cancelled_write_bytes) / (1024 * 1024)) / elapsed_time
             total_throughput = read_mbps + write_mbps
@@ -98,44 +103,43 @@ def compute_process_metrics(first_snapshot: dict, second_snapshot: dict, elapsed
             metrics[pid] = {
                 "read_mb_per_sec": read_mbps,
                 "write_mb_per_sec": write_mbps,
-                "total throughput": total_throughput
+                "total_throughput": total_throughput
             }
 
     return metrics
 
 def display_process_table(stats: dict) -> None:
-    print("Device   Reads/s   Writes/s   Read MB/s   Write MB/s   Util%   Avg Latency(ms)")
+    print("PID    Read MB/s    Write MB/s    Total Throughput (MB/s)")
     
-    for pid in stats.keys():
+    for pid in sorted(stats.keys(), key=lambda pid: stats[pid]["total_throughput"], reverse=True):
         rps = stats[pid]["read_mb_per_sec"]
         wps = stats[pid]["write_mb_per_sec"]
-        rmbps = stats[device]["read_mb_per_sec"]
-        wmbps = stats[device]["write_mb_per_sec"]
-        util = stats[device]["util_pct"]
-        avg_latency = stats[device]["avg_latency_ms"]
-        print(f"{device} {rps} {wps} {rmbps} {wmbps} {util} {avg_latency}")
+        total_throughput = stats[pid]["total_throughput"]
+        print(f"{pid} {rps} {wps} {total_throughput}")
 
 
 if __name__ == "__main__":
-    diskstats = f"/proc/diskstats"
+    while True:
+        os.system('clear')
+        diskstats = f"/proc/diskstats"
 
-    t1 = time.perf_counter()
-    first_half = parse_diskstats(diskstats)
-    time.sleep(2)
-    second_half = parse_diskstats(diskstats)
-    t2 = time.perf_counter()
+        t1 = time.perf_counter()
+        first_half = parse_diskstats(diskstats)
+        process_t1 = time.perf_counter()
+        process_first_half = parse_process_io()
 
-    elapsed = t2 - t1 
+        time.sleep(2)
+        
+        second_half = parse_diskstats(diskstats)
+        process_second_half = parse_process_io()
+        process_t2 = time.perf_counter()
+        t2 = time.perf_counter()
 
-    diskstats_delta = compute_disk_metrics(first_half, second_half, elapsed)
-    display_table_metrics(diskstats_delta)
+        elapsed = t2 - t1 
+        process_elapsed = process_t2 - process_t1
 
-    process_t1 = time.perf_counter()
-    process_first_half = parse_process_io()
-    time.sleep(2)
-    process_second_half = parse_process_io()
-    process_t2 = time.perf_counter()
+        diskstats_delta = compute_disk_metrics(first_half, second_half, elapsed)
+        display_table_metrics(diskstats_delta)
 
-    process_elapsed = process_t2 - process_t1
-
-    process_stats_delta = compute_process_metrics(process_first_half, process_second_half, process_elapsed)
+        process_stats_delta = compute_process_metrics(process_first_half, process_second_half, process_elapsed)
+        display_process_table(process_stats_delta)
