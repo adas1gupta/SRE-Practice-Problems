@@ -15,7 +15,7 @@ with open("/usr/include/x86_64-linux-gnu/asm/unistd_64.h") as f:
         match = re.match(r'#define __NR_(\w+)\s+(\d+)', line)
         if match:
             name, number = match.groups()
-            syscall_names[int(number)] = name
+            SYSCALL_NAMES[int(number)] = name
 
 class UserRegsStruct(ctypes.Structure):
     _fields_ = [
@@ -95,7 +95,7 @@ if __name__ == "__main__":
                 sys_num = registers.orig_rax
             else:
                 return_val = registers.rax 
-                print(f"system call: {syscall_names[sys_num]}, arguments: {registers.rdi, registers.rsi, registers.rdx}, return value: {return_val}")
+                print(f"system call: {SYSCALL_NAMES.get(sys_num, f"unknown({sys_num})")}, arguments: {registers.rdi, registers.rsi, registers.rdx}, return value: {return_val}")
 
             entry = not entry
             libc.ptrace(PTRACE_SYSCALL, pid, None, None)
