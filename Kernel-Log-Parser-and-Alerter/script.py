@@ -3,10 +3,8 @@ import signal
 import os
 import time
 import re
+import json
 from enum import Enum
-
-shutdown = threading.Event()
-mode = ParserMode.NORMAL
 
 class Category(Enum):
     NORMAL = 0
@@ -25,6 +23,8 @@ class Category(Enum):
 class ParserMode(Enum):
     NORMAL = 0
     OOM_ACCUMULATION = 1
+
+shutdown = threading.Event()
 
 def signal_handler(signum, frame):
     if signum == signal.SIGINT or signum == signal.SIGTERM:
@@ -48,6 +48,20 @@ def parse_raw_line(line: str) -> dict:
         "flags": flags,
         "message": halves[1].strip(),
         "continuation": False
+    }
+
+def parse_oom_event(line: dict) -> dict:
+    match = re.search(r"Killed process (\d+) \((\w+)\) total-vm:(\d+)kB, anon-rss:(\d+)kB", line["message"])
+    pid = match.group(1)
+    name = match.group(2)
+    total_vm = match.group(3)
+    anon_rss = match.group(4)
+
+    return {
+        "pid": pid, 
+        "process_name": name, 
+        "total-vm": total_vm, 
+        "anon-rss": anon_rss
     }
 
 def classification(parsed: dict) -> Category: 
@@ -77,6 +91,9 @@ def classification(parsed: dict) -> Category:
 
 
 if __name__ == "__main__":
+    mode = ParserMode.NORMAL
+    oom_lines = []
+    
     fd = os.open("/dev/kmsg", os.O_RDONLY | os.O_NONBLOCK)
 
     with open(fd, "r") as f:
@@ -84,14 +101,25 @@ if __name__ == "__main__":
             try:
                 line = f.readline()
                 parsed_line = parse_raw_line(line)
-                category = classification(parsed_line)
 
-                if category == Category.OOM:
-                    mode = ParserMode.OOM_ACCUMULATION
-                else:
-                    mode = ParserMode.NORMAL
-                    
-                
-                print(f.readline(), end="")
+                if parsed_line["continuation"]:
+                    continue
+
+                if mode == ParserMode.NORMAL:
+                    category = classification(parsed_line)
+                    if category == Category.OOM:
+                        mode = ParserMode.OOM_ACCUMULATION
+                        oom_lines.append(parsed_line)
+                    else:
+                        print(json.dumps({"category": category.name, "message": parsed_line["message"], "timestamp": parsed_line["timestamp"], "severity": parsed_line["priority"] & 0x07}))
+
+                elif mode == ParserMode.OOM_ACCUMULATION:
+                    oom_lines.append(parsed_line)
+                    if re.search(r"Killed process", parsed_line["message"]):        
+                        parsed_oom = parse_oom_event(parsed_line)
+                        print(json.dumps({"category": Category.OOM.name, "message": parsed_line["message"], "timestamp": parsed_line["timestamp"], "pid": parsed_oom["pid"], "process_name": parsed_oom["process_name"], "total-vm": parsed_oom["total-vm"], "anon-rss": parsed_oom["anon-rss"], "severity": parsed_line["priority"] & 0x07}))
+                        mode = ParserMode.NORMAL
+                        oom_lines = []
+
             except BlockingIOError:
                 time.sleep(0.1)
