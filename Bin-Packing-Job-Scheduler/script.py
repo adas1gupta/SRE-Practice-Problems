@@ -1,5 +1,9 @@
 from dataclasses import dataclass 
+import structlog
+import random
+import copy
 
+logger = structlog.get_logger()
 
 @dataclass
 class Machine:
@@ -67,7 +71,7 @@ def best_fit(jobs: list[Job], machines: list[Machine]) -> list[Job]:
         for machine in machines:
             if fits(job, machine):
                 cpu_scalar = machine.available_cpu / machine.total_cpu
-                gpu_scalar = machine.available_gpu / machine.total_gpu
+                gpu_scalar = machine.available_gpu / machine.total_gpu if machine.total_gpu > 0 else 0
                 memory_scalar = machine.available_memory / machine.total_memory
                 total_scalar = cpu_scalar + gpu_scalar + memory_scalar
 
@@ -130,3 +134,48 @@ def generate_jobs(amount: int) -> list[Job]:
         jobs.append(job)
     
     return jobs
+
+def machine_utilization(machines: list[Machine]) -> float:
+    num_machines = len(machines)
+    capacities = []
+    
+    for machine in machines:
+        cpu_scalar = machine.allocated_cpu / machine.total_cpu
+        gpu_scalar = machine.allocated_gpu / machine.total_gpu if machine.total_gpu > 0 else 0
+        memory_scalar = machine.allocated_memory / machine.total_memory
+        total_scalar = cpu_scalar + gpu_scalar + memory_scalar
+
+        capacities.append(total_scalar / 3)
+
+    average = sum(capacities)
+    return average / num_machines if num_machines > 0 else 0
+
+def machine_fragmentation(unplaced_jobs: list[Job], machines: list[Machine]) -> int:
+    placeable_jobs = len(unplaced_jobs)
+
+    for job in unplaced_jobs:
+        for machine in machines:
+            if fits(job, machine):
+                placeable_jobs -= 1
+                break
+    
+    return placeable_jobs
+
+if __name__ == "__main__":
+    ffd_machines = generate_machines(20)
+    ffd_jobs = generate_jobs(10)
+
+    best_fit_machines = copy.deepcopy(ffd_machines)
+    best_fit_jobs = copy.deepcopy(ffd_jobs)
+
+    unplaced_ffd = first_fit_decreasing(ffd_jobs, ffd_machines)
+    unplaced_best_fit = best_fit(best_fit_jobs, best_fit_machines)
+
+    ffd_utilization = machine_utilization(ffd_machines)
+    best_fit_utilization = machine_utilization(best_fit_machines)
+
+    placeable_ffd = machine_fragmentation(unplaced_ffd, ffd_machines)
+    placeable_best_fit = machine_fragmentation(unplaced_best_fit, best_fit_machines)
+
+    logger.info("ffd_results", utilization=ffd_utilization, unscheduled=len(unplaced_ffd), fragmentation=placeable_ffd)
+    logger.info("best_fit_results", utilization=best_fit_utilization, unscheduled=len(unplaced_best_fit), fragmentation=placeable_best_fit)
