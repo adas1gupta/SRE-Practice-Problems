@@ -81,3 +81,52 @@ def best_fit(jobs: list[Job], machines: list[Machine]) -> list[Job]:
             
     
     return unplaced_jobs
+
+def generate_machines(amount: int) -> list[Machine]:
+    thinking_machines = []
+
+    for m_id in range(amount):
+        machine_id = m_id
+        total_cpu = random.randint(16, 128)
+        total_memory = random.randint(32, 256)
+        total_gpu = random.randint(0, 8)
+
+        allocated_cpu = 0
+        allocated_memory = 0
+        allocated_gpu = 0
+
+        machine = Machine(
+            machine_id,
+            total_cpu, 
+            total_memory,
+            total_gpu,
+            allocated_cpu,
+            allocated_memory, 
+            allocated_gpu
+        )
+
+        thinking_machines.append(machine)
+    
+    return thinking_machines
+
+def generate_jobs(amount: int) -> list[Job]:
+    jobs = []
+
+    for j_id in range(amount):
+        job_id = j_id
+        required_cpu = random.randint(16, 128)
+        required_memory = random.randint(32, 256)
+        required_gpu = random.randint(0, 8)
+        priority = random.randint(-19, 20)
+
+        job = Job(
+            job_id,
+            required_cpu,
+            required_memory,
+            required_gpu,
+            priority
+        )
+
+        jobs.append(job)
+    
+    return jobs
