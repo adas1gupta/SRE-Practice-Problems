@@ -162,8 +162,8 @@ def machine_fragmentation(unplaced_jobs: list[Job], machines: list[Machine]) -> 
     return placeable_jobs
 
 if __name__ == "__main__":
-    ffd_machines = generate_machines(20)
-    ffd_jobs = generate_jobs(10)
+    ffd_machines = generate_machines(10)
+    ffd_jobs = generate_jobs(20)
 
     best_fit_machines = copy.deepcopy(ffd_machines)
     best_fit_jobs = copy.deepcopy(ffd_jobs)
