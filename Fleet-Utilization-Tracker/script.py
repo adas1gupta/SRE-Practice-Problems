@@ -68,3 +68,31 @@ def compute_stats(machines: list[Machine]) -> list[tuple]:
     gpu_tuple = (statistics.mean(gpu_list), gpu_p25, gpu_p75, gpu_p95)
 
     return [cpu_tuple, mem_tuple, gpu_tuple]
+
+def is_stranded(machine: Machine) -> bool:
+    return machine.cpu_used_pct < 20 and machine.memory_used_pct < 20 and machine.gpu_used_pct < 20
+
+def get_stranded(machines: list[Machine]) -> list[Machine]:
+    return [m for m in machines if is_stranded(m)]
+
+def is_hotspot(machine: Machine) -> bool:
+    return machine.cpu_used_pct > 85 or machine.memory_used_pct > 85 or machine.gpu_used_pct > 85
+
+def get_hotspots(machines: list[Machine]) -> list[Machine]:
+    return [m for m in machines if is_hotspot(m)]
+
+def group_machines_by_rack(machines: list[Machine]) -> dict:
+    rack_groups = defaultdict(list)
+
+    for machine in machines:
+        rack_groups[machine.rack].append(machine)
+
+    return rack_groups 
+
+def group_machines_by_datacenter(machines: list[Machine]) -> dict: 
+    datacenter_groups = defaultdict(list)
+
+    for machine in machines:
+        datacenter_groups[machine.datacenter].append(machine)
+
+    return datacenter_groups
