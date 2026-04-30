@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections import defaultdict
 import argparse 
 import random
 import statistics
@@ -22,13 +23,11 @@ datacenters = ["dc-east", "dc-west", "dc-central"]
 
 def orchestrate_machines() -> list[Machine]:
     num_machines = args.machines
-    num_racks = len(racks)
-    num_datacenters = len(datacenters)
     machines = []
 
     for machine_id in range(num_machines):
         machine_rack = random.choice(racks)
-        machine_datacenter = random.choice(num_datacenters)
+        machine_datacenter = random.choice(datacenters)
         cpu_used = random.uniform(0, 100)
         memory_used = random.uniform(0, 100)
         gpu_used = random.uniform(0, 100)
@@ -51,18 +50,18 @@ def compute_stats(machines: list[Machine]) -> list[tuple]:
     mem_list = [machine.memory_used_pct for machine in machines]
     gpu_list = [machine.gpu_used_pct for machine in machines]
     
-    cpu_quartiles = statistics.quantiles(cpu_list, 4)
+    cpu_quartiles = statistics.quantiles(cpu_list, n=4)
     cpu_p25, cpu_p75 = cpu_quartiles[0], cpu_quartiles[2]
     
-    mem_quartiles = statistics.quantiles(mem_list, 4)
+    mem_quartiles = statistics.quantiles(mem_list, n=4)
     mem_p25, mem_p75 = mem_quartiles[0], mem_quartiles[2]
     
-    gpu_quartiles = statistics.quantiles(gpu_list, 4)
+    gpu_quartiles = statistics.quantiles(gpu_list, n=4)
     gpu_p25, gpu_p75 = gpu_quartiles[0], gpu_quartiles[2]
     
-    cpu_p95 = statistics.quantiles(cpu_list, 20)[18]
-    mem_p95 = statistics.quantiles(mem_list, 20)[18]
-    gpu_p95 = statistics.quantiles(gpu_list, 20)[18]
+    cpu_p95 = statistics.quantiles(cpu_list, n=20)[18]
+    mem_p95 = statistics.quantiles(mem_list, n=20)[18]
+    gpu_p95 = statistics.quantiles(gpu_list, n=20)[18]
 
     cpu_tuple = (statistics.mean(cpu_list), cpu_p25, cpu_p75, cpu_p95)
     mem_tuple = (statistics.mean(mem_list), mem_p25, mem_p75, mem_p95)
@@ -118,6 +117,7 @@ def produce_summary_report():
 
     idle_racks = decommission(group_machines_by_rack(machines))
     idle_datacenters = decommission(group_machines_by_datacenter(machines))
+    stats = compute_stats(machines)
 
     report_dict = {
         "total_machine_count": total_machine_count, 
@@ -125,10 +125,14 @@ def produce_summary_report():
         "hotspot_count": hotspot_count, 
         "utilized_count": utilized_count, 
         "idle_racks": idle_racks,
-        "idle_datacenters": idle_datacenters
+        "idle_datacenters": idle_datacenters,
+        "stats": stats
     }
 
     report_json = json.dumps(report_dict)
     print(report_json)
 
     return report_json
+
+if __name__ == "__main__":
+    produce_summary_report()
