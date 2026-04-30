@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import argparse 
 import random
 import statistics
+import json
 
 parser = argparse.ArgumentParser(description="Fleet Utilization Tracker")
 parser.add_argument("--machines", help="number of machines to dispatch", default=100, type=int)
@@ -107,3 +108,27 @@ def decommission(group_dict: dict) -> list:
             decommission_list.append(key)
     
     return decommission_list
+
+def produce_summary_report():
+    machines = orchestrate_machines()
+    total_machine_count = len(machines)
+    stranded_count = len(get_stranded(machines))
+    hotspot_count = len(get_hotspots(machines))
+    utilized_count = total_machine_count - stranded_count - hotspot_count
+
+    idle_racks = decommission(group_machines_by_rack(machines))
+    idle_datacenters = decommission(group_machines_by_datacenter(machines))
+
+    report_dict = {
+        "total_machine_count": total_machine_count, 
+        "stranded_count": stranded_count,
+        "hotspot_count": hotspot_count, 
+        "utilized_count": utilized_count, 
+        "idle_racks": idle_racks,
+        "idle_datacenters": idle_datacenters
+    }
+
+    report_json = json.dumps(report_dict)
+    print(report_json)
+
+    return report_json
