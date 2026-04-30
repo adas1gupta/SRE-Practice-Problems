@@ -96,3 +96,14 @@ def group_machines_by_datacenter(machines: list[Machine]) -> dict:
         datacenter_groups[machine.datacenter].append(machine)
 
     return datacenter_groups
+
+def decommission(group_dict: dict) -> list:
+    decommission_list = []
+
+    for key, val in group_dict.items():
+        util_avg = sum((m.cpu_used_pct + m.gpu_used_pct + m.memory_used_pct) / 3 for m in val) / len(val)
+        
+        if util_avg < 30: 
+            decommission_list.append(key)
+    
+    return decommission_list
