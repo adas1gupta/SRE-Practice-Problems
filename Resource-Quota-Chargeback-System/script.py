@@ -1,6 +1,8 @@
 from dataclasses import dataclass 
 from uuid import uuid4, UUID 
 from datetime import datetime
+import time 
+import threading
 
 class QuotaExceededError(Exception):
     pass
@@ -55,79 +57,79 @@ class BorrowRecord:
     lender: Team
     resource: str 
     amount: int 
-    expiry: DateTime
+    expiry: datetime
 
 class QuotaManager():
+    self.RESOURCE_ATTRS = {
+        "cpu": ("allocated_cpu", "max_cpu"),
+        "memory": ("allocated_memory", "max_memory"),
+        "gpu": ("allocated_gpu", "max_gpu"),
+    }
+
     def __init__(self):
         self.team_registry = {}
-        self.borrowed_records = []
+        self.borrowed_records = []    
     
     def add_team(self, team: Team):
-        if team in self.team_registry: return 
+        if team.name in self.team_registry: return 
         self.team_registry[team.name] = team
     
     def allocate(self, team: Team, resource: str, amount: int) -> None:
-        match resource:
-            case "cpu":
-                if team.allocated_cpu + amount > team.max_cpu: 
-                    raise QuotaExceededError("Max Amount Exceeded")
-                else:
-                    team.allocated_cpu += amount 
-            case "memory":
-                if team.allocated_memory + amount > team.max_memory: 
-                    raise QuotaExceededError("Max Amount Exceeded")
-                else:
-                    team.allocated_memory += amount 
-            case "gpu":
-                if team.allocated_gpu + amount > team.max_gpu: 
-                    raise QuotaExceededError("Max Amount Exceeded")
-                else:
-                    team.allocated_gpu += amount 
+        if resource not in self.RESOURCE_ATTRS:
+            raise ValueError(f"Unknown resource: {resource}")
+        
+        allocated_attr, max_attr = self.RESOURCE_ATTRS[resource]
+        
+        if getattr(team, allocated_attr) + amount > getattr(team, max_attr):
+            raise QuotaExceededError(f"Max {resource} exceeded")
+        setattr(team, allocated_attr, getattr(team, allocated_attr) + amount)
     
     def release(self, team: Team, resource: str, amount: int) -> None:
-        match resource:
-            case "cpu":
-                if team.allocated_cpu - amount < 0: 
-                    raise InsufficientAllocationError("Not enough CPU")
-                else:
-                    team.allocated_cpu -= amount 
-            case "memory":
-                if team.allocated_memory - amount < 0: 
-                    raise InsufficientAllocationError("Not enough memory")
-                else:
-                    team.allocated_memory -= amount 
-            case "gpu":
-                if team.allocated_gpu - amount < 0: 
-                    raise InsufficientAllocationError("Not enough GPU")
-                else:
-                    team.allocated_gpu -= amount 
+        if resource not in self.RESOURCE_ATTRS:
+            raise ValueError(f"Unknown resource: {resource}")
+
+        allocated_attr, max_attr = self.RESOURCE_ATTRS[resource]
+        
+        if getattr(team, allocated_attr) - amount < 0:
+            raise InsufficientAllocationError(f"Not enough {resource}")
+        setattr(team, allocated_attr, getattr(team, allocated_attr) - amount) 
 
     def borrow(self, borrower: Team, lender: Team, resource: str, amount: int, timestamp) -> BorrowRecord:
-        match resource:
-            case "cpu":
-                if team.allocated_cpu - amount < 0: 
-                    raise InsufficientAllocationError("Not enough CPU")
-                else:
-                    self.allocate(borrower, resource, amount)
-                    self.release(lender, resource, amount)
-                    record = BorrowRecord(borrower, lender, resource, amount, timestamp)
-            case "memory":
-                if team.allocated_memory - amount < 0: 
-                    raise InsufficientAllocationError("Not enough memory")
-                else:
-                    self.allocate(borrower, resource, amount)
-                    self.release(lender, resource, amount)
-                    record = BorrowRecord(borrower, lender, resource, amount, timestamp) 
-            case "gpu":
-                if team.allocated_gpu - amount < 0: 
-                    raise InsufficientAllocationError("Not enough GPU")
-                else:
-                    self.allocate(borrower, resource, amount)
-                    self.release(lender, resource, amount)
-                    record = BorrowRecord(borrower, lender, resource, amount, timestamp)
-
+        if resource not in self.RESOURCE_ATTRS:
+            raise ValueError(f"Unknown resource: {resource}")
+        
+        allocated_attr, max_attr = self.RESOURCE_ATTRS[resource]
+        
+        if getattr(lender, max_attr) - getattr(lender, allocated_attr) < amount:
+            raise InsufficientAllocationError(f"Not enough {resource}")
+        else:
+            setattr(lender, max_attr, getattr(lender, max_attr) - amount) 
+            setattr(borrower, max_attr, getattr(borrower, max_attr) + amount) 
+            self.allocate(borrower, resource, amount)
+            record = BorrowRecord(borrower, lender, resource, amount, timestamp)
+            
+        self.borrowed_records.append(record)
         return record 
     
     def expire_borrows(self) -> None:
         current_time = datetime.now()
-        self.borrow_records = [r for r in self.borrow_records if r.expiry >= current_time]
+        new_records = []
+
+        for r in self.borrowed_records:
+            if r.expiry >= current_time:
+                new_records.append(r)
+            else:
+                _, max_attr = self.RESOURCE_ATTRS[r.resource]
+                setattr(r.lender, max_attr, getattr(r.lender, max_attr) + r.amount)
+                setattr(r.borrower, max_attr, getattr(r.borrower, max_attr) - r.amount)
+                
+        self.borrowed_records = new_records
+    
+    def start_expiry_worker(self, interval) -> None:
+        def worker():
+            while True:
+                time.sleep(interval)
+                self.expire_borrows()
+        
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
