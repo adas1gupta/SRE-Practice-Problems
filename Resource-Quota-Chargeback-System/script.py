@@ -4,6 +4,10 @@ from datetime import datetime
 import time 
 import threading
 
+CPU_RATE = 0.10   # $ per CPU per month
+MEMORY_RATE = 0.01  # $ per GB per month
+GPU_RATE = 2.00   # $ per GPU per month
+
 class QuotaExceededError(Exception):
     pass
 
@@ -59,8 +63,23 @@ class BorrowRecord:
     amount: int 
     expiry: datetime
 
+@dataclass 
+class TeamReport:
+    team_name: str 
+    cpu_allocation: int
+    memory_allocation: int
+    gpu_allocation: int 
+    cpu_utilization: int 
+    mem_utilization: int 
+    gpu_utilization: int
+    waste_cpu: int 
+    waste_mem: int 
+    waste_gpu: int 
+    total_cost: int 
+    wasteful_flag: bool
+
 class QuotaManager():
-    self.RESOURCE_ATTRS = {
+    RESOURCE_ATTRS = {
         "cpu": ("allocated_cpu", "max_cpu"),
         "memory": ("allocated_memory", "max_memory"),
         "gpu": ("allocated_gpu", "max_gpu"),
@@ -133,3 +152,47 @@ class QuotaManager():
         
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
+    
+    def generate_report(self) -> None:
+        reports = []
+        for team_name, team in self.team_registry.items():
+            cpu_util = (team.used_cpu / team.allocated_cpu if team.allocated_cpu > 0 else 0) * 100
+            mem_util = (team.used_memory / team.allocated_memory if team.allocated_memory > 0 else 0) * 100
+            gpu_util = (team.used_gpu / team.allocated_gpu if team.allocated_gpu > 0 else 0) * 100
+            cost = (team.allocated_cpu * CPU_RATE) + (team.allocated_memory * MEMORY_RATE) + (team.allocated_gpu * GPU_RATE)
+
+            report = TeamReport(
+                team_name, 
+                team.allocated_cpu,
+                team.allocated_memory,
+                team.allocated_gpu,
+                cpu_util,
+                mem_util,
+                gpu_util,
+                100 - cpu_util,
+                100 - mem_util, 
+                100 - gpu_util,
+                cost, 
+                team.is_wasteful
+            )
+
+            reports.append(report)
+        
+        return reports
+
+if __name__ == "__main__":
+    quota_manager = QuotaManager()
+
+    team_a = Team(team_id=uuid4(), name="infra", max_cpu=100, max_memory=256, max_gpu=8)
+    team_b = Team(team_id=uuid4(), name="ml", max_cpu=200, max_memory=512, max_gpu=16)
+    team_c = Team(team_id=uuid4(), name="product", max_cpu=50, max_memory=128, max_gpu=4)
+
+    quota_manager.add_team(team_a)
+    quota_manager.add_team(team_b)
+    quota_manager.add_team(team_c)
+    
+    quota_manager.allocate(team_a, "cpu", 20)
+
+    team_a.used_gpu = 4
+    
+     
