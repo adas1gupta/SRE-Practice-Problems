@@ -1,5 +1,6 @@
 from dataclasses import dataclass 
 from uuid import uuid4, UUID 
+from datetime import datetime
 
 class QuotaExceededError(Exception):
     pass
@@ -48,9 +49,18 @@ class Team:
             wasteful(self.used_memory, self.allocated_memory) or \
             wasteful(self.used_gpu, self.allocated_gpu)
 
+@dataclass
+class BorrowRecord:
+    borrower: Team
+    lender: Team
+    resource: str 
+    amount: int 
+    expiry: DateTime
+
 class QuotaManager():
     def __init__(self):
         self.team_registry = {}
+        self.borrowed_records = []
     
     def add_team(self, team: Team):
         if team in self.team_registry: return 
@@ -91,3 +101,33 @@ class QuotaManager():
                     raise InsufficientAllocationError("Not enough GPU")
                 else:
                     team.allocated_gpu -= amount 
+
+    def borrow(self, borrower: Team, lender: Team, resource: str, amount: int, timestamp) -> BorrowRecord:
+        match resource:
+            case "cpu":
+                if team.allocated_cpu - amount < 0: 
+                    raise InsufficientAllocationError("Not enough CPU")
+                else:
+                    self.allocate(borrower, resource, amount)
+                    self.release(lender, resource, amount)
+                    record = BorrowRecord(borrower, lender, resource, amount, timestamp)
+            case "memory":
+                if team.allocated_memory - amount < 0: 
+                    raise InsufficientAllocationError("Not enough memory")
+                else:
+                    self.allocate(borrower, resource, amount)
+                    self.release(lender, resource, amount)
+                    record = BorrowRecord(borrower, lender, resource, amount, timestamp) 
+            case "gpu":
+                if team.allocated_gpu - amount < 0: 
+                    raise InsufficientAllocationError("Not enough GPU")
+                else:
+                    self.allocate(borrower, resource, amount)
+                    self.release(lender, resource, amount)
+                    record = BorrowRecord(borrower, lender, resource, amount, timestamp)
+
+        return record 
+    
+    def expire_borrows(self) -> None:
+        current_time = datetime.now()
+        self.borrow_records = [r for r in self.borrow_records if r.expiry >= current_time]
