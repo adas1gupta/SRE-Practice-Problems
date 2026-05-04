@@ -1,6 +1,6 @@
 from dataclasses import dataclass 
 from uuid import uuid4, UUID 
-from datetime import datetime
+from datetime import datetime, timedelta
 import time 
 import threading
 
@@ -153,7 +153,7 @@ class QuotaManager():
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
     
-    def generate_report(self) -> None:
+    def generate_report(self) -> list[TeamReport]:
         reports = []
         for team_name, team in self.team_registry.items():
             cpu_util = (team.used_cpu / team.allocated_cpu if team.allocated_cpu > 0 else 0) * 100
@@ -195,4 +195,9 @@ if __name__ == "__main__":
 
     team_a.used_gpu = 4
     
-     
+    quota_manager.borrow(team_a, team_b, "gpu", 12, datetime.now() + timedelta(hours=1)) 
+    quota_manager.start_expiry_worker(60)
+
+    report = quota_manager.generate_report()
+    for r in report:
+        print(r)
